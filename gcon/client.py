@@ -43,10 +43,45 @@ class GalaxyClient(AbstractClient):
         self.url = creds.get("url", None)
         self.api_key = creds.get("api-key", None)
         self.gi = GalaxyInstance(self.url, self.api_key)
+        self.hc = HistoryClient(self.gi)
 
     def list_dirs(self):
-        hc = HistoryClient(self.gi)
-        return hc.get_histories()
+        return self.hc.get_histories()
+
+    def list_files(self, hid, ftype):
+        history_id = self._get_hid(hid)
+        history_name = self._get_hname(hid)
+        history = self.hc.show_history(hid)
+        files = history['state_ids']['ok']
+        if ftype:
+            files = [x for x in files if self.show_file(hid, x)['data_type'] == ftype]
+        return files
+
+    def show_file(self, hid, fid):
+        return self.hc.show_dataset(hid, fid)
+
+    def get_file(self, hid, fid):
+        return self.hc.download_dataset(hid, fid)
+
+    def _get_hid(self, hid):
+        try:
+            return hid.get("id", None)
+        except AttributeError:
+            return hid
+
+    def _get_hname(self, hid):
+        try:
+            return hid.get("name", None)
+        except AttributeError:
+            return hid
+
+def fileinfo_galaxy(file_id):
+    pass
+
+def split_galaxy_id(file_id):
+    if file_id:
+        parts = file_id.split(":", 2)
+
 
 creds = {"api-key": "2c221263a9128811911975d4ce8c98f7",
          "url": "https://main.g2.bx.psu.edu/"}
