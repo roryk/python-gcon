@@ -11,5 +11,7 @@ setup(name = "python-gcon",
       namespace_packages = ["gcon"],
       packages = find_packages(),
       scripts = [],
-      install_requires = ['bioblend']
+      dependency_links=['http://github.com/roryk/basespace-python-sdk/tarball/master#egg=basespace-python-sdk-0.1.2'],
+      install_requires = ['bioblend',
+                          'BaseSpacePy']
     )
