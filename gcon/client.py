@@ -1,5 +1,6 @@
-from bioblend.galaxy.histories import HistoryClient
 from bioblend.galaxy import GalaxyInstance
+import uuid
+import collections
 
 def get_client(platform, creds):
     if platform == "genomespace":
@@ -43,25 +44,46 @@ class GalaxyClient(AbstractClient):
         self.url = creds.get("url", None)
         self.api_key = creds.get("api-key", None)
         self.gi = GalaxyInstance(self.url, self.api_key)
-        self.hc = HistoryClient(self.gi)
 
     def list_dirs(self):
-        return self.hc.get_histories()
+        return self.gi.histories.get_histories()
 
-    def list_files(self, hid, ftype):
-        history_id = self._get_hid(hid)
-        history_name = self._get_hname(hid)
-        history = self.hc.show_history(hid)
-        files = history['state_ids']['ok']
+    def list_files(self, ftype=None):
+        histories = self.list_dirs()
+        history_ids = self._get_history_ids(histories)
+        files = flatten(map(self._list_files_in_history, history_ids))
+        fileinfos = map(self.gi.datasets.show_dataset, files)
         if ftype:
-            files = [x for x in files if self.show_file(hid, x)['data_type'] == ftype]
-        return files
-
-    def show_file(self, hid, fid):
-        return self.hc.show_dataset(hid, fid)
+            fileinfos = [x for x in fileinfos if x['data_type'] == ftype]
+            fileinfos = filter(self._is_file_accessible, fileinfos)
+        return fileinfos
 
     def get_file(self, hid, fid):
-        return self.hc.download_dataset(hid, fid)
+        return self.gi.histories.download_dataset(hid, fid)
+
+    def _get_history_ids(self, histories):
+        return [x["id"] for x in histories]
+
+    def _is_file_accessible(self, finfo):
+        return finfo["accessible"]
+
+    def _list_files_in_history(self, hid):
+        history = self.gi.histories.show_history(hid)
+        return history['state_ids']['ok']
+
+    def put_file(self, hid, fid):
+        """
+        final Map<String, String> uploadParameters = new HashMap<String, String>();
+        uploadParameters.put("dbkey", dbKey);
+        uploadParameters.put("file_type", fileType);
+        uploadParameters.put("files_0|NAME", file.getName());
+        uploadParameters.put("files_0|type", "upload_dataset");
+        """
+        lib_id = str(uuid.uuid4())
+        self.lc.create_library(lib_id)
+
+    def _prep_put(self, hid, fid):
+        pass
 
     def _get_hid(self, hid):
         try:
@@ -75,13 +97,32 @@ class GalaxyClient(AbstractClient):
         except AttributeError:
             return hid
 
-def fileinfo_galaxy(file_id):
-    pass
+    def _get_user_info(self):
+        user_info = self.gi.users.get_current_user()
+        if not user_info:
+            return None
+        elif "username" in user_info:
+            return user_info.get("username")
+        elif "email" in user_info:
+            return user_info.get("email")
+        else:
+            return None
 
-def split_galaxy_id(file_id):
-    if file_id:
-        parts = file_id.split(":", 2)
+def flatten(l):
+    """
+    flatten an irregular list of lists
+    example: flatten([[[1, 2, 3], [4, 5]], 6]) -> [1, 2, 3, 4, 5, 6]
+    lifted from: http://stackoverflow.com/questions/2158395/
 
+    """
+    for el in l:
+        if isinstance(el, collections.Iterable) and not isinstance(el,
+                                                                   basestring):
+            for sub in flatten(el):
+                yield sub
+        else:
+            yield el
 
+# just for testing atm
 creds = {"api-key": "2c221263a9128811911975d4ce8c98f7",
          "url": "https://main.g2.bx.psu.edu/"}
